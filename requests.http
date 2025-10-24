@@ -1,0 +1,38 @@
+### Info de DB
+GET http://localhost:4000/api/debug/db-info
+
+### Registro Dueño
+POST http://localhost:4000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "dueno1@ex.com",
+  "password": "Pass123!",
+  "role": "dueno",
+  "nombre": "Ana Dueña",
+  "telefono": "+56 9 1234 5678",
+  "direccion": "Calle 123"
+}
+
+### Registro Veterinario
+POST http://localhost:4000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "vet1@ex.com",
+  "password": "Pass123!",
+  "role": "veterinario",
+  "nombre": "Dr. Vet",
+  "especialidad": "Felinos",
+  "licencia": "VET-123",
+  "clinica": "Central"
+}
+
+### Login
+POST http://localhost:4000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "dueno1@ex.com",
+  "password": "Pass123!"
+}
