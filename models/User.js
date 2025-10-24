@@ -1,15 +1,13 @@
-import mongoose from 'mongoose'
+import mongoose from 'mongoose';
 
-const UserSchema = new mongoose.Schema(
+const userSchema = new mongoose.Schema(
   {
-    email: { type: String, required: true, unique: true, index: true },
+    email: { type: String, unique: true, required: true, index: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ['dueno', 'veterinario'], required: true },
-    nombre: { type: String },
-    telefono: { type: String },
-    direccion: { type: String }
+    nombre: { type: String }
   },
-  { timestamps: true, collection: 'users' } // única colección para usuarios (como en tu imagen)
-)
+  { timestamps: true }
+);
 
-export default mongoose.model('User', UserSchema)
+export default mongoose.model('User', userSchema);
