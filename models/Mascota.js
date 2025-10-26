@@ -10,7 +10,7 @@ const MascotaSchema = new Schema(
     fechaNacimiento: { type: String },
     sexo: { type: String }
   },
-  { timestamps: true, collection: 'mascotas' } // se crea automáticamente al primer insert
+  { timestamps: true, collection: 'mascotas' }
 )
 
 export default mongoose.model('Mascota', MascotaSchema)

@@ -9,7 +9,7 @@ const CitaSchema = new Schema(
     motivo: { type: String, required: true },
     estado: { type: String, default: 'pendiente' }
   },
-  { timestamps: true, collection: 'citas' } // se crea automáticamente al primer insert
+  { timestamps: true, collection: 'citas' }
 )
 
 export default mongoose.model('Cita', CitaSchema)
