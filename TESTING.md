@@ -16,6 +16,7 @@ curl http://localhost:4000/api/health
 Expected: `{"ok":true}`
 
 ### 2. Register a Dueño (Owner)
+# Note: Using simple password for testing. In production, use strong passwords.
 ```bash
 curl -X POST http://localhost:4000/api/auth/register \
   -H "Content-Type: application/json" \

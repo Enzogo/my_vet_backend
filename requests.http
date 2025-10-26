@@ -42,6 +42,8 @@ Content-Type: application/json
 }
 
 ### Variables (replace with actual tokens after login)
+# After running the login requests above, copy the tokens from responses and paste here
+# Example: @duenoToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 @duenoToken = your_dueno_token_here
 @vetToken = your_vet_token_here
 @mascotaId = your_mascota_id_here
@@ -96,6 +98,7 @@ GET http://localhost:4000/api/owners/me/citas
 Authorization: Bearer {{duenoToken}}
 
 ### Create Cita
+# Note: Update fechaIso to a future date when testing
 POST http://localhost:4000/api/owners/me/citas
 Content-Type: application/json
 Authorization: Bearer {{duenoToken}}
