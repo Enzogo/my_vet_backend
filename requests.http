@@ -1,5 +1,5 @@
-### Info de DB
-GET http://localhost:4000/api/debug/db-info
+### Health Check
+GET http://localhost:4000/api/health
 
 ### Registro Dueño
 POST http://localhost:4000/api/auth/register
@@ -9,9 +9,7 @@ Content-Type: application/json
   "email": "dueno1@ex.com",
   "password": "Pass123!",
   "role": "dueno",
-  "nombre": "Ana Dueña",
-  "telefono": "+56 9 1234 5678",
-  "direccion": "Calle 123"
+  "nombre": "Ana Dueña"
 }
 
 ### Registro Veterinario
@@ -22,17 +20,215 @@ Content-Type: application/json
   "email": "vet1@ex.com",
   "password": "Pass123!",
   "role": "veterinario",
-  "nombre": "Dr. Vet",
-  "especialidad": "Felinos",
-  "licencia": "VET-123",
-  "clinica": "Central"
+  "nombre": "Dr. Vet"
 }
 
-### Login
+### Login Dueño
 POST http://localhost:4000/api/auth/login
 Content-Type: application/json
 
 {
   "email": "dueno1@ex.com",
   "password": "Pass123!"
+}
+
+### Login Vet
+POST http://localhost:4000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "vet1@ex.com",
+  "password": "Pass123!"
+}
+
+### Variables (replace with actual tokens after login)
+# After running the login requests above, copy the tokens from responses and paste here
+# Example: @duenoToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+@duenoToken = your_dueno_token_here
+@vetToken = your_vet_token_here
+@mascotaId = your_mascota_id_here
+@citaId = your_cita_id_here
+
+### ==================== OWNER ENDPOINTS ====================
+
+### Update Profile
+POST http://localhost:4000/api/owners/me/profile
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "nombre": "Ana Dueña Actualizado",
+  "telefono": "+56 9 1234 5678",
+  "direccion": "Calle Principal 123"
+}
+
+### Get My Mascotas
+GET http://localhost:4000/api/owners/me/mascotas
+Authorization: Bearer {{duenoToken}}
+
+### Create Mascota
+POST http://localhost:4000/api/owners/me/mascotas
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "nombre": "Firulais",
+  "especie": "perro",
+  "raza": "Golden Retriever",
+  "fechaNacimiento": "2020-01-15",
+  "sexo": "macho"
+}
+
+### Update Mascota
+PUT http://localhost:4000/api/owners/me/mascotas/{{mascotaId}}
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "nombre": "Firulais Actualizado",
+  "raza": "Labrador"
+}
+
+### Delete Mascota
+DELETE http://localhost:4000/api/owners/me/mascotas/{{mascotaId}}
+Authorization: Bearer {{duenoToken}}
+
+### Get My Citas
+GET http://localhost:4000/api/owners/me/citas
+Authorization: Bearer {{duenoToken}}
+
+### Create Cita
+# Note: Update fechaIso to a future date when testing
+POST http://localhost:4000/api/owners/me/citas
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "fechaIso": "2025-11-01T10:00:00Z",
+  "motivo": "Vacunación anual",
+  "mascotaId": "{{mascotaId}}"
+}
+
+### Reprogramar Cita
+PUT http://localhost:4000/api/owners/me/citas/{{citaId}}
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "fechaIso": "2025-11-02T14:00:00Z",
+  "motivo": "Vacunación y revisión general"
+}
+
+### Delete Cita
+DELETE http://localhost:4000/api/owners/me/citas/{{citaId}}
+Authorization: Bearer {{duenoToken}}
+
+### ==================== FEEDBACK ENDPOINTS ====================
+
+### Create Feedback
+POST http://localhost:4000/api/feedback
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "rating": 5,
+  "sugerencia": "Excelente servicio, muy profesionales"
+}
+
+### Get My Feedback
+GET http://localhost:4000/api/feedback/mine
+Authorization: Bearer {{duenoToken}}
+
+### Get All Feedback (admin/vet)
+GET http://localhost:4000/api/feedback
+Authorization: Bearer {{vetToken}}
+
+### ==================== AI ENDPOINTS ====================
+
+### Pre-diagnóstico
+POST http://localhost:4000/api/ai/prediagnostico
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "sintomas": "Mi perro no quiere comer y está muy decaído desde ayer",
+  "especie": "perro",
+  "edad": "5 años",
+  "sexo": "macho"
+}
+
+### Pre-diagnóstico - Gato
+POST http://localhost:4000/api/ai/prediagnostico
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "sintomas": "Mi gato tiene diarrea y vómitos desde hace 2 días",
+  "especie": "gato",
+  "edad": "3 años",
+  "sexo": "hembra"
+}
+
+### ==================== VET ENDPOINTS ====================
+
+### Get All Owners
+GET http://localhost:4000/api/vet/owners
+Authorization: Bearer {{vetToken}}
+
+### Get All Mascotas
+GET http://localhost:4000/api/vet/mascotas
+Authorization: Bearer {{vetToken}}
+
+### Get All Citas
+GET http://localhost:4000/api/vet/citas
+Authorization: Bearer {{vetToken}}
+
+### ==================== ERROR TESTING ====================
+
+### Test 401 - No Token
+GET http://localhost:4000/api/owners/me/mascotas
+
+### Test 403 - Dueño trying Vet endpoint
+GET http://localhost:4000/api/vet/owners
+Authorization: Bearer {{duenoToken}}
+
+### Test Invalid Role
+POST http://localhost:4000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "invalid@test.com",
+  "password": "Pass123!",
+  "role": "admin",
+  "nombre": "Invalid User"
+}
+
+### Test Duplicate Email
+POST http://localhost:4000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "dueno1@ex.com",
+  "password": "Pass123!",
+  "role": "dueno",
+  "nombre": "Duplicate"
+}
+
+### Test Invalid Credentials
+POST http://localhost:4000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "dueno1@ex.com",
+  "password": "wrongpassword"
+}
+
+### Test Invalid Rating
+POST http://localhost:4000/api/feedback
+Content-Type: application/json
+Authorization: Bearer {{duenoToken}}
+
+{
+  "rating": 10,
+  "sugerencia": "Invalid rating test"
 }
