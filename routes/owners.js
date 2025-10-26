@@ -64,6 +64,51 @@ router.post('/me/mascotas', auth, async (req, res) => {
   }
 })
 
+// NUEVO: Editar mascota
+router.put('/me/mascotas/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'mascotaId inválido' })
+    const { nombre, especie, raza, fechaNacimiento, sexo } = req.body || {}
+    const update = {}
+    if (nombre !== undefined) update.nombre = nombre
+    if (especie !== undefined) update.especie = especie
+    if (raza !== undefined) update.raza = raza
+    if (fechaNacimiento !== undefined) update.fechaNacimiento = fechaNacimiento
+    if (sexo !== undefined) update.sexo = sexo
+
+    const updated = await Mascota.findOneAndUpdate(
+      { _id: id, ownerId: req.userId },
+      { $set: update },
+      { new: true }
+    )
+    if (!updated) return res.status(404).json({ error: 'mascota no encontrada' })
+    return res.json({
+      id: updated._id.toString(),
+      nombre: updated.nombre,
+      especie: updated.especie,
+      raza: updated.raza ?? null
+    })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// NUEVO: Eliminar mascota
+router.delete('/me/mascotas/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'mascotaId inválido' })
+    const r = await Mascota.deleteOne({ _id: id, ownerId: req.userId })
+    if (!r.deletedCount) return res.status(404).json({ error: 'mascota no encontrada' })
+    return res.json(true)
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
 router.get('/me/citas', auth, async (req, res) => {
   try {
     const citas = await Cita.find({ ownerId: req.userId }).lean()
@@ -106,6 +151,58 @@ router.post('/me/citas', auth, async (req, res) => {
       mascotaId: doc.mascotaId.toString(),
       estado: doc.estado
     })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// NUEVO: Reprogramar/editar cita
+router.put('/me/citas/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'citaId inválido' })
+    const { fechaIso, motivo, mascotaId } = req.body || {}
+
+    const update = {}
+    if (fechaIso !== undefined) update.fechaIso = fechaIso
+    if (motivo !== undefined) update.motivo = motivo
+
+    if (mascotaId !== undefined) {
+      if (!mongoose.isValidObjectId(mascotaId)) return res.status(400).json({ error: 'mascotaId inválido' })
+      const mascota = await Mascota.findOne({ _id: mascotaId, ownerId: req.userId }).lean()
+      if (!mascota) return res.status(404).json({ error: 'mascota no encontrada' })
+      update.mascotaId = mascotaId
+    }
+
+    const updated = await Cita.findOneAndUpdate(
+      { _id: id, ownerId: req.userId },
+      { $set: update },
+      { new: true }
+    )
+    if (!updated) return res.status(404).json({ error: 'cita no encontrada' })
+
+    return res.json({
+      id: updated._id.toString(),
+      fechaIso: updated.fechaIso,
+      motivo: updated.motivo,
+      mascotaId: updated.mascotaId.toString(),
+      estado: updated.estado
+    })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// NUEVO: Eliminar cita
+router.delete('/me/citas/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'citaId inválido' })
+    const r = await Cita.deleteOne({ _id: id, ownerId: req.userId })
+    if (!r.deletedCount) return res.status(404).json({ error: 'cita no encontrada' })
+    return res.json(true)
   } catch (e) {
     console.error(e)
     return res.status(500).json({ error: 'server_error' })

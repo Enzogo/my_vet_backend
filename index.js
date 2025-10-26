@@ -1,32 +1,30 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import mongoose from 'mongoose';
-import authRouter from './routes/auth.js';
+import 'dotenv/config'
+import express from 'express'
+import cors from 'cors'
+import mongoose from 'mongoose'
+import ownersRouter from './routes/owners.js'
+import vetRouter from './routes/vet.js'
+import authRouter from './routes/auth.js' 
 
-dotenv.config();
+const app = express()
+app.use(cors())
+app.use(express.json())
 
-const app = express();
-const PORT = process.env.PORT || 4000;
+const uri = process.env.MONGODB_URI
+if (!uri) {
+  console.error('Falta MONGODB_URI en .env')
+  process.exit(1)
+}
 
-// Middlewares
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+await mongoose.connect(uri)
+console.log('MongoDB conectado')
 
-// Rutas
-app.use('/auth', authRouter); // => POST /auth/register y POST /auth/login
+// Rutas montadas
+app.use('/api/auth', authRouter)  
+app.use('/api/owners', ownersRouter)
+app.use('/api/vet', vetRouter)
 
-// Conexión a Mongo
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/my_vet';
+app.get('/api/health', (_, res) => res.json({ ok: true }))
 
-mongoose.connect(mongoUri)
-  .then(() => {
-    console.log('MongoDB conectado');
-    app.listen(PORT, () => {
-      console.log(`API escuchando en http://localhost:${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Error al conectar a MongoDB:', err);
-    process.exit(1);
-  });
+const port = process.env.PORT || 4000
+app.listen(port, () => console.log(`API escuchando en http://localhost:${port}`))
