@@ -30,6 +30,32 @@ function ruleBasedFallback({ sintomas, especie }) {
   }
 }
 
+async function generateWithGemini(key, prompt) {
+  const genAI = new GoogleGenerativeAI(key)
+
+  // Intenta estos modelos en orden
+  const candidates = [
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest',
+    'gemini-1.0-pro'
+  ]
+
+  let lastErr
+  for (const modelId of candidates) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelId })
+      const resp = await model.generateContent(prompt)
+      const text = resp.response?.text?.() || resp.response?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || ''
+      if (text) return { ok: true, text, modelId }
+      lastErr = new Error('Respuesta vacía')
+    } catch (e) {
+      lastErr = e
+      // Continúa al siguiente modelo
+    }
+  }
+  return { ok: false, error: lastErr }
+}
+
 router.post('/prediagnostico', auth, async (req, res) => {
   try {
     const { sintomas, especie, edad, sexo } = req.body || {}
@@ -37,11 +63,10 @@ router.post('/prediagnostico', auth, async (req, res) => {
 
     const key = process.env.GEMINI_API_KEY
     if (!key) {
+      // Sin API key → fallback
       return res.json(ruleBasedFallback({ sintomas, especie }))
     }
 
-    const genAI = new GoogleGenerativeAI(key)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
     const prompt =
 `Eres un asistente veterinario. Con base en los siguientes datos, entrega recomendaciones orientativas y banderas rojas.
 Sintomas: ${sintomas}
@@ -53,14 +78,20 @@ Formato de salida:
 - Recomendaciones:
 - Red flags:
 - Disclaimer:`
-    const resp = await model.generateContent(prompt)
-    const text = resp.response.text()
-    // Particion simple:
+
+    const result = await generateWithGemini(key, prompt)
+    if (!result.ok) {
+      console.error('Gemini error:', result.error)
+      return res.json(ruleBasedFallback({ sintomas, especie }))
+    }
+
+    const text = result.text
+
     const recomendaciones = (text.match(/Recomendaciones:\s*([\s\S]*?)(?:Red flags:|Disclaimer:|$)/i)?.[1] || '').trim()
     const red_flags = (text.match(/Red flags:\s*([\s\S]*?)(?:Disclaimer:|$)/i)?.[1] || '').trim() || null
     const disclaimer = (text.match(/Disclaimer:\s*([\s\S]*)/i)?.[1] || 'Esto es solo orientativo.').trim()
 
-    return res.json({ recomendaciones, red_flags, disclaimer })
+    return res.json({ recomendaciones, red_flags, disclaimer, _model: result.modelId })
   } catch (e) {
     console.error('prediagnostico error', e)
     return res.json(ruleBasedFallback(req.body || {}))

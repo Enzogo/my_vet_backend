@@ -1,13 +1,19 @@
 import mongoose from 'mongoose'
-const { Schema } = mongoose
 
-const UserSchema = new Schema({
-  email: { type: String, required: true, unique: true, index: true },
+const UserSchema = new mongoose.Schema({
+  email: { type: String, unique: true, required: true },
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ['dueno', 'veterinario'], required: true },
-  nombre: { type: String, default: '' },
-  telefono: { type: String },
-  direccion: { type: String }
+  nombre: String,
+  telefono: String,
+  direccion: String,
+
+  // Campos para veterinario
+  clinicName: String,
+  clinicPhone: String,
+  clinicAddress: String,
+  speciality: String,
+  registrationNumber: String
 }, { timestamps: true })
 
-export default mongoose.model('User', UserSchema) // colección: users
+export default mongoose.model('User', UserSchema)

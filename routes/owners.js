@@ -7,6 +7,7 @@ import mongoose from 'mongoose'
 
 const router = Router()
 
+// Perfil del dueño
 router.post('/me/profile', auth, async (req, res) => {
   try {
     const { nombre, telefono, direccion } = req.body || {}
@@ -16,12 +17,10 @@ router.post('/me/profile', auth, async (req, res) => {
     if (typeof direccion === 'string') update.direccion = direccion
     await User.updateOne({ _id: req.userId }, { $set: update })
     return res.json(true)
-  } catch (e) {
-    console.error(e)
-    return res.status(500).json({ error: 'server_error' })
-  }
+  } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Mascotas: listar propias
 router.get('/me/mascotas', auth, async (req, res) => {
   try {
     const mascotas = await Mascota.find({ ownerId: req.userId }).lean()
@@ -34,6 +33,7 @@ router.get('/me/mascotas', auth, async (req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Mascotas: crear
 router.post('/me/mascotas', auth, async (req, res) => {
   try {
     const { nombre, especie, raza, fechaNacimiento, sexo } = req.body || {}
@@ -43,6 +43,7 @@ router.post('/me/mascotas', auth, async (req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Mascotas: editar
 router.put('/me/mascotas/:id', auth, async (req, res) => {
   try {
     const { id } = req.params
@@ -55,6 +56,7 @@ router.put('/me/mascotas/:id', auth, async (req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Mascotas: eliminar
 router.delete('/me/mascotas/:id', auth, async (req, res) => {
   try {
     const { id } = req.params
@@ -65,6 +67,7 @@ router.delete('/me/mascotas/:id', auth, async (req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Citas: listar propias
 router.get('/me/citas', auth, async (req, res) => {
   try {
     const citas = await Cita.find({ ownerId: req.userId }).lean()
@@ -78,6 +81,7 @@ router.get('/me/citas', auth, async (req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Citas: crear
 router.post('/me/citas', auth, async (req, res) => {
   try {
     const { fechaIso, motivo, mascotaId } = req.body || {}
@@ -90,6 +94,7 @@ router.post('/me/citas', auth, async (req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Citas: reprogramar/editar
 router.put('/me/citas/:id', auth, async (req, res) => {
   try {
     const { id } = req.params
@@ -110,6 +115,7 @@ router.put('/me/citas/:id', auth, async (req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Citas: eliminar
 router.delete('/me/citas/:id', auth, async (req, res) => {
   try {
     const { id } = req.params

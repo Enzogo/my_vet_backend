@@ -11,9 +11,7 @@ import feedbackRouter from './routes/feedback.js'
 
 const app = express()
 
-app.use(helmet({
-  crossOriginResourcePolicy: false
-}))
+app.use(helmet({ crossOriginResourcePolicy: false }))
 app.use(cors({
   origin: ['http://localhost:3000', 'http://10.0.2.2:3000', 'http://10.0.2.2:4000', '*'],
   credentials: false
@@ -32,18 +30,18 @@ console.log('MongoDB conectado a', mongoose.connection.name)
 // Salud
 app.get('/api/health', (_req, res) => res.json({ ok: true, db: mongoose.connection.readyState }))
 
-// Rutas API
+// Rutas
 app.use('/api/auth', authRouter)
 app.use('/api/owners', ownersRouter)
 app.use('/api/vet', vetRouter)
 app.use('/api/ai', aiRouter)
 app.use('/api/feedback', feedbackRouter)
 
-// Errores
+// Manejador de errores
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error', err)
   res.status(500).json({ error: 'server_error' })
 })
 
 const port = process.env.PORT || 4000
-app.listen(port, () => console.log(`API en http://localhost:${port}`))
+app.listen(port, () => console.log(`API escuchando en http://localhost:${port}`))

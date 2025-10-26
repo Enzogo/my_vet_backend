@@ -15,7 +15,7 @@ export default async function auth(req, res, next) {
     if (!user) return res.status(401).json({ error: 'Usuario no existe' })
 
     next()
-  } catch (e) {
+  } catch (_e) {
     return res.status(401).json({ error: 'Token inválido' })
   }
 }
