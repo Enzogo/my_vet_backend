@@ -8,7 +8,8 @@ const MascotaSchema = new Schema(
     especie: { type: String, required: true },
     raza: { type: String },
     fechaNacimiento: { type: String },
-    sexo: { type: String }
+    sexo: { type: String },
+    edad: { type: Number }
   },
   { timestamps: true, collection: 'mascotas' }
 )
