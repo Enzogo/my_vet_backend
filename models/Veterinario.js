@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const { Schema } = mongoose;
+import mongoose from 'mongoose'
+const { Schema } = mongoose
 
 const veterinarioSchema = new Schema(
   {
@@ -10,6 +10,6 @@ const veterinarioSchema = new Schema(
     clinica: { type: String },
   },
   { timestamps: true }
-);
+)
 
-module.exports = mongoose.model('Veterinario', veterinarioSchema, 'veterinarios');
+export default mongoose.model('Veterinario', veterinarioSchema, 'veterinarios')

@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const { Schema } = mongoose;
+import mongoose from 'mongoose'
+const { Schema } = mongoose
 
 const duenoSchema = new Schema(
   {
@@ -9,6 +9,6 @@ const duenoSchema = new Schema(
     direccion: { type: String },
   },
   { timestamps: true }
-);
+)
 
-module.exports = mongoose.model('Dueno', duenoSchema, 'duenos');
+export default mongoose.model('Dueno', duenoSchema, 'duenos')

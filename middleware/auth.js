@@ -14,8 +14,10 @@ export default async function auth(req, res, next) {
     const user = await User.findById(req.userId).lean()
     if (!user) return res.status(401).json({ error: 'Usuario no existe' })
 
+    req.user = user
+
     next()
   } catch (_e) {
-    return res.status(401).json({ error: 'Token inválido' })
+    return res.status(401).json({ error: 'Token inválido o expirado' })
   }
 }
