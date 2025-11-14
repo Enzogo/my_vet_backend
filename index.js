@@ -3,12 +3,6 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import mongoose from 'mongoose'
-import authRouter from './routes/auth.js'
-import ownersRouter from './routes/owners.js'
-import vetRouter from './routes/vet.js'
-import feedbackRouter from './routes/feedback.js'
-import profileRouter from './routes/profile.js'
-import agentRouter from './routes/agent.js'
 
 const app = express()
 
@@ -19,26 +13,53 @@ app.use(cors({
 }))
 app.use(express.json())
 
-const uri = process.env.MONGODB_URI || process.env.MONGO_URI
-if (!uri) {
-  console.error('Falta MONGODB_URI en .env')
-  process.exit(1)
+// helper: importar dinámicamente y devolver default si existe (soporta módulos CommonJS/ESM)
+async function loadRouter(path) {
+  try {
+    const mod = await import(path)
+    return mod?.default ?? mod
+  } catch (e) {
+    console.error(`[index] Error cargando router '${path}':`, e)
+    throw e
+  }
 }
 
-await mongoose.connect(uri)
-console.log('MongoDB conectado a', mongoose.connection.name)
+try {
+  // importa routers dinámicamente (soporta tanto export default como module.exports)
+  const authRouter = await loadRouter('./routes/auth.js')
+  const ownersRouter = await loadRouter('./routes/owners.js')
+  const vetRouter = await loadRouter('./routes/vet.js')
+  const feedbackRouter = await loadRouter('./routes/feedback.js')
+  const profileRouter = await loadRouter('./routes/profile.js')
+  const agentRouter = await loadRouter('./routes/agent.js')
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, db: mongoose.connection.readyState }))
+  // Conexión a MongoDB
+  const uri = process.env.MONGODB_URI || process.env.MONGO_URI
+  if (!uri) {
+    console.error('[MyVet] ERROR: Falta MONGODB_URI en .env')
+    process.exit(1)
+  }
 
-// montar routers
-app.use('/api/auth', authRouter)
-app.use('/api/owners', ownersRouter)
-app.use('/api/vet', vetRouter)
-app.use('/api/feedback', feedbackRouter)
-app.use('/api/profile', profileRouter)
+  console.log('[index] Usando MONGODB_URI:', uri.replace(/(\/\/.*:).*(@.*)/, '$1****$2')) // no imprimir credenciales completas
+  await mongoose.connect(uri)
+  console.log('[MyVet] MongoDB conectado a', mongoose.connection.name)
 
-// montar el nuevo agent en /api/ai
-app.use('/api/ai', agentRouter)
+  // Healthcheck
+  app.get('/api/health', (_req, res) => res.json({ ok: true, db: mongoose.connection.readyState }))
 
-const port = process.env.PORT || 4000
-app.listen(port, () => console.log(`API escuchando en http://localhost:${port}`))
+  // Montaje de rutas
+  app.use('/api/auth', authRouter)
+  app.use('/api/owners', ownersRouter)
+  app.use('/api/vet', vetRouter)
+  app.use('/api/feedback', feedbackRouter)
+  app.use('/api/profile', profileRouter)
+
+  // AI: montamos el agent en /api/ai
+  app.use('/api/ai', agentRouter)
+
+  const port = process.env.PORT || 4000
+  app.listen(port, () => console.log(`[MyVet] API escuchando en http://localhost:${port}`))
+} catch (e) {
+  console.error('[index] Error inicializando la aplicación:', e)
+  process.exit(1)
+}
