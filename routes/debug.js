@@ -1,11 +1,10 @@
-const express = require('express');
-const router = express.Router();
-const mongoose = require('mongoose');
+import { Router } from 'express';
+import mongoose from 'mongoose';
+import User from '../models/User.js';
+import Dueno from '../models/Dueno.js';
+import Veterinario from '../models/Veterinario.js';
 
-let User, Dueno, Veterinario;
-try { User = require('../models/User'); } catch {}
-try { Dueno = require('../models/Dueno'); } catch {}
-try { Veterinario = require('../models/Veterinario'); } catch {}
+const router = Router();
 
 router.get('/db-info', async (_req, res) => {
   try {
@@ -18,9 +17,9 @@ router.get('/db-info', async (_req, res) => {
     const collections = colls.map(c => c.name).sort();
 
     const counts = {};
-    if (User) counts.users = await User.countDocuments().catch(() => 0);
-    if (Dueno) counts.duenos = await Dueno.countDocuments().catch(() => 0);
-    if (Veterinario) counts.veterinarios = await Veterinario.countDocuments().catch(() => 0);
+    counts.users = await User.countDocuments().catch(() => 0);
+    counts.duenos = await Dueno.countDocuments().catch(() => 0);
+    counts.veterinarios = await Veterinario.countDocuments().catch(() => 0);
 
     res.json({ host, dbName, collections, counts });
   } catch (e) {
@@ -28,4 +27,4 @@ router.get('/db-info', async (_req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

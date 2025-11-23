@@ -67,19 +67,82 @@ router.delete('/me/mascotas/:id', auth, async (req, res) => {
   } catch (e) { console.error('[owners] /me/mascotas DELETE error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
-// Citas: listar propias
+// Citas: listar propias (todas)
 router.get('/me/citas', auth, async (req, res) => {
   try {
-    const citas = await Cita.find({ ownerId: req.userId }).lean()
+    const citas = await Cita.find({ ownerId: req.userId })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .lean()
     return res.json(citas.map(c => ({
       id: c._id.toString(),
       fechaIso: c.fechaIso,
       motivo: c.motivo,
-      mascotaId: c.mascotaId?.toString() ?? null,
+      mascotaId: c.mascotaId?._id?.toString() ?? null,
+      mascotaNombre: c.mascotaId?.nombre ?? null,
       estado: c.estado ?? null,
+      diagnostico: c.diagnostico || null,
+      procedimientos: c.procedimientos || null,
+      recomendaciones: c.recomendaciones || null,
+      horaInicio: c.horaInicio || null,
+      horaFin: c.horaFin || null,
+      veterinarioId: c.veterinarioId?.toString() ?? null,
+      veterinarioNombre: c.veterinarioNombre || null,
       notas: c.notas || null
     })))
   } catch (e) { console.error('[owners] /me/citas error:', e); return res.status(500).json({ error: 'server_error' }) }
+})
+
+// Citas: listar pendientes
+router.get('/me/citas/pendientes', auth, async (req, res) => {
+  try {
+    const citas = await Cita.find({ ownerId: req.userId, estado: 'pendiente' })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .lean()
+    return res.json(citas.map(c => ({
+      id: c._id.toString(),
+      fechaIso: c.fechaIso,
+      motivo: c.motivo,
+      mascotaId: c.mascotaId?._id?.toString() ?? null,
+      mascotaNombre: c.mascotaId?.nombre ?? null,
+      estado: c.estado,
+      diagnostico: c.diagnostico || null,
+      procedimientos: c.procedimientos || null,
+      recomendaciones: c.recomendaciones || null,
+      horaInicio: c.horaInicio || null,
+      horaFin: c.horaFin || null,
+      veterinarioId: c.veterinarioId?.toString() ?? null,
+      veterinarioNombre: c.veterinarioNombre || null,
+      notas: c.notas || null
+    })))
+  } catch (e) { console.error('[owners] /me/citas/pendientes error:', e); return res.status(500).json({ error: 'server_error' }) }
+})
+
+// Citas: listar completadas
+router.get('/me/citas/completadas', auth, async (req, res) => {
+  try {
+    const citas = await Cita.find({ ownerId: req.userId, estado: 'completada' })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .lean()
+    return res.json(citas.map(c => ({
+      id: c._id.toString(),
+      fechaIso: c.fechaIso,
+      motivo: c.motivo,
+      mascotaId: c.mascotaId?._id?.toString() ?? null,
+      mascotaNombre: c.mascotaId?.nombre ?? null,
+      estado: c.estado,
+      diagnostico: c.diagnostico || null,
+      procedimientos: c.procedimientos || null,
+      recomendaciones: c.recomendaciones || null,
+      horaInicio: c.horaInicio || null,
+      horaFin: c.horaFin || null,
+      veterinarioId: c.veterinarioId?.toString() ?? null,
+      veterinarioNombre: c.veterinarioNombre || null,
+      notas: c.notas || null
+    })))
+  } catch (e) { console.error('[owners] /me/citas/completadas error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
 // Citas: crear (versión con logging y verificación explícita)

@@ -1,7 +1,12 @@
-require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
+import 'dotenv/config.js';
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import authRouter from './routes/auth.js';
+import debugRouter from './routes/debug.js';
+import profileRouter from './routes/profile.js';
+import ownersRouter from './routes/owners.js';
+import vetRouter from './routes/vet.js';
 
 console.log('[MyVet] Iniciando servidor...');
 
@@ -10,16 +15,11 @@ app.use(cors());
 app.use(express.json());
 
 // Rutas principales
-const authRouter = require('./routes/auth');
 app.use('/api/auth', authRouter);
-
-// Ruta de diagnóstico
-const debugRouter = require('./routes/debug');
 app.use('/api/debug', debugRouter);
-
-// Ruta de perfil (nueva)
-const profileRouter = require('./routes/profile');
 app.use('/api/profile', profileRouter);
+app.use('/api/owners', ownersRouter);
+app.use('/api/vet', vetRouter);
 
 // Conexión a MongoDB
 const MONGO_URI = process.env.MONGO_URI;

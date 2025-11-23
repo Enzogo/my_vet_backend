@@ -61,20 +61,32 @@ router.get('/citas', async (_req, res) => {
   try {
     const citas = await Cita.find({})
       .sort({ createdAt: -1 })
-      .populate({ path: 'ownerId', select: 'nombre email' })
-      .populate({ path: 'mascotaId', select: 'nombre ownerId' })
-    const out = citas.map(c => {
-      const duenio = c.ownerId || c.mascotaId?.ownerId
-      return {
-        id: c._id.toString(),
-        fecha: c.fechaIso || c.fecha || null,
-        estado: c.estado || 'pendiente',
-        motivo: c.motivo || null,
-        duenioNombre: duenio?.nombre || duenio?.email || null,
-        mascotaNombre: c.mascotaId?.nombre || null,
-        notas: c.notas || null
-      }
-    })
+      .populate({ path: 'ownerId', select: 'nombre email telefono' })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .lean()
+    
+    const out = citas.map(c => ({
+      id: c._id.toString(),
+      fechaIso: c.fechaIso,
+      motivo: c.motivo,
+      estado: c.estado || 'pendiente',
+      mascotaId: c.mascotaId?._id?.toString() ?? null,
+      mascotaNombre: c.mascotaId?.nombre || null,
+      ownerId: c.ownerId?._id?.toString() ?? null,
+      duenioNombre: c.ownerId?.nombre || c.ownerId?.email || null,
+      duenioTelefono: c.ownerId?.telefono || null,
+      duenioCorreo: c.ownerId?.email || null,
+      veterinarioId: c.veterinarioId?.toString() ?? null,
+      veterinarioNombre: c.veterinarioNombre || null,
+      diagnostico: c.diagnostico || null,
+      procedimientos: c.procedimientos || null,
+      recomendaciones: c.recomendaciones || null,
+      horaInicio: c.horaInicio || null,
+      horaFin: c.horaFin || null,
+      notas: c.notas || null
+    }))
+    
     return res.json(out)
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
@@ -100,24 +112,51 @@ router.post('/me/profile', async (req, res) => {
 router.patch('/citas/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const { estado, notas } = req.body || {}
+    const { estado, notas, diagnostico, procedimientos, recomendaciones, horaInicio, horaFin } = req.body || {}
     const set = {}
-    if (typeof estado === 'string' && ['pendiente', 'en_curso', 'hecha'].includes(estado)) set.estado = estado
+    
+    // Estado
+    if (typeof estado === 'string' && ['pendiente', 'en_curso', 'completada', 'cancelada'].includes(estado)) {
+      set.estado = estado
+    }
+    
+    // Notas generales
     if (typeof notas === 'string') set.notas = notas
+    
+    // Ficha médica
+    if (typeof diagnostico === 'string') set.diagnostico = diagnostico
+    if (typeof procedimientos === 'string') set.procedimientos = procedimientos
+    if (typeof recomendaciones === 'string') set.recomendaciones = recomendaciones
+    
+    // Horarios
+    if (typeof horaInicio === 'string') set.horaInicio = horaInicio
+    if (typeof horaFin === 'string') set.horaFin = horaFin
 
     const updated = await Cita.findByIdAndUpdate(id, { $set: set }, { new: true })
-      .populate({ path: 'ownerId', select: 'nombre email' })
-      .populate({ path: 'mascotaId', select: 'nombre ownerId' })
+      .populate({ path: 'ownerId', select: 'nombre email telefono' })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+    
     if (!updated) return res.status(404).json({ error: 'no_encontrada' })
 
-    const duenio = updated.ownerId || updated.mascotaId?.ownerId
     return res.json({
       id: updated._id.toString(),
-      fecha: updated.fechaIso || updated.fecha || null,
-      estado: updated.estado || 'pendiente',
-      motivo: updated.motivo || null,
-      duenioNombre: duenio?.nombre || duenio?.email || null,
-      mascotaNombre: updated.mascotaId?.nombre || null,
+      fechaIso: updated.fechaIso,
+      motivo: updated.motivo,
+      estado: updated.estado,
+      mascotaId: updated.mascotaId?._id?.toString() ?? null,
+      mascotaNombre: updated.mascotaId?.nombre ?? null,
+      ownerId: updated.ownerId?._id?.toString() ?? null,
+      duenioNombre: updated.ownerId?.nombre || updated.ownerId?.email || null,
+      duenioTelefono: updated.ownerId?.telefono || null,
+      duenioCorreo: updated.ownerId?.email || null,
+      veterinarioId: updated.veterinarioId?.toString() ?? null,
+      veterinarioNombre: updated.veterinarioNombre || null,
+      diagnostico: updated.diagnostico || null,
+      procedimientos: updated.procedimientos || null,
+      recomendaciones: updated.recomendaciones || null,
+      horaInicio: updated.horaInicio || null,
+      horaFin: updated.horaFin || null,
       notas: updated.notas || null
     })
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
