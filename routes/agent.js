@@ -5,10 +5,14 @@ import AiConsult from '../models/AiConsult.js'
 import * as embeddingUtil from '../ai/embeddings.js'
 import { generateFallback } from '../ai/fallback.js'
 import path from 'path'
+import fs from 'fs'
 import requireRole from '../middleware/requireRole.js'
 import Ajv from 'ajv'
-import vetSchema from '../schemas/vet_triage.schema.json' assert { type: 'json' }
 import { GoogleGenerativeAI } from '@google/generative-ai'
+
+// Cargar schema desde archivo JSON
+const vetSchemaPath = new URL('../schemas/vet_triage.schema.json', import.meta.url)
+const vetSchema = JSON.parse(fs.readFileSync(vetSchemaPath, 'utf-8'))
 
 const router = express.Router()
 const DATA_DIR = path.resolve(process.cwd(), 'data', 'vet')
