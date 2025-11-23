@@ -19,7 +19,7 @@ const DATA_DIR = path.resolve(process.cwd(), 'data', 'vet')
 
 // GEMINI CONFIG
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
 const gemini = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null
 
 // AJV para validar salida JSON del LLM
