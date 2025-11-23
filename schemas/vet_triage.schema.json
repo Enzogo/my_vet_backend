@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VetTriage",
+  "type": "object",
+  "required": ["animal", "urgency","likely_causes","recommended_next_steps","warning","disclaimer"],
+  "properties": {
+    "animal": { "type": "string", "enum": ["perro","gato","conejo","hurón","ave","loro","canario","pájaro","pez","cobaya","hamster","huron"] },
+    "urgency": {
+      "type": "string",
+      "enum": ["low","medium","high","emergency","unknown"]
+    },
+    "likely_causes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 0
+    },
+    "recommended_next_steps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 0
+    },
+    "warning": { "type": "string" },
+    "disclaimer": { "type": "string" }
+  },
+  "additionalProperties": false
+}

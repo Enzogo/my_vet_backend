@@ -4,16 +4,26 @@ import auth from '../middleware/auth.js'
 import AiConsult from '../models/AiConsult.js'
 import * as embeddingUtil from '../ai/embeddings.js'
 import { generateFallback } from '../ai/fallback.js'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import path from 'path'
 import requireRole from '../middleware/requireRole.js'
+import Ajv from 'ajv'
+import vetSchema from '../schemas/vet_triage.schema.json' assert { type: 'json' }
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const router = express.Router()
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash'
 const DATA_DIR = path.resolve(process.cwd(), 'data', 'vet')
 
-const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null
+// GEMINI CONFIG
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro'
+const gemini = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null
+
+// AJV para validar salida JSON del LLM
+const ajv = new Ajv({ allErrors: true, removeAdditional: true })
+const validate = ajv.compile(vetSchema)
+
+// Especies permitidas (mascotas comunes)
+const ALLOWED_PETS = ['perro','gato','conejo','hurón','ave','loro','canario','pájaro','pez','cobaya','hamster','huron']
 
 let indexed = false
 async function ensureIndex() {
@@ -22,26 +32,104 @@ async function ensureIndex() {
   indexed = true
 }
 
-// POST /api/ai/agent - dueño crea consulta prediagnóstica
+// Heurística simple para detectar si texto habla de mascotas
+function isLikelyPetQuery(text) {
+  if (!text) return false
+  const kws = ['perro','gato','mascota','cachorro','gata','perrita','canino','felino','colita','oreja','patita','ronronea','ladra','maulla']
+  const lower = text.toLowerCase()
+  return kws.some(k => lower.includes(k))
+}
+
+// Intentar inferir especie del texto (heurístico). Devuelve null si ambiguo.
+function inferSpeciesFromText(text) {
+  if (!text) return null
+  const lower = text.toLowerCase()
+  for (const pet of ALLOWED_PETS) {
+    if (lower.includes(pet)) return pet
+  }
+  // patrones comunes
+  if (lower.includes('muerde') || lower.includes('ladr')) return 'perro'
+  if (lower.includes('maull') || lower.includes('arañ')) return 'gato'
+  return null
+}
+
+// POST /api/ai/agent - dueño crea consulta prediagnóstica (solo mascotas)
 router.post('/agent', auth, async (req, res) => {
   try {
-    const { sintomas, especie, edad, contexto } = req.body || {}
+    let { sintomas, especie, edad, contexto } = req.body || {}
     if (!sintomas) return res.status(400).json({ error: 'sintomas requerido' })
+
+    // 1) asegurar que es sobre mascotas
+    if (!isLikelyPetQuery(sintomas) && !especie) {
+      return res.status(400).json({ error: 'Solo se aceptan consultas sobre mascotas. Por favor indique especie (ej: perro, gato) o describa que se trata de una mascota.' })
+    }
+
+    // 2) si especie no provista, intentar inferir
+    if (!especie) {
+      const inferred = inferSpeciesFromText(sintomas)
+      if (!inferred) {
+        return res.status(400).json({ error: 'Especie no identificada. Por favor indique la especie de la mascota (ej: perro, gato).' })
+      }
+      especie = inferred
+    } else {
+      especie = String(especie).toLowerCase()
+    }
+
+    // 3) validar que sea una especie permitida (solo mascotas)
+    if (!ALLOWED_PETS.includes(especie)) {
+      return res.status(400).json({ error: 'Solo se permiten consultas para mascotas domésticas comunes (perro, gato, conejo, ave, etc.).' })
+    }
 
     await ensureIndex()
 
-    // 1) Sin necesidad de embedding - búsqueda por keywords
-    const top = embeddingUtil.findTopK(sintomas, 4)
-    const evidence = top.map(t => `SOURCE:${t.id}\n${t.text}`).join('\n\n---\n\n')
-    const sources = top.map(t => t.id)
+    // 4) embedding (mismo manejo de errores que ya tienes)
+    let qEmb
+    try {
+      qEmb = await embeddingUtil.embedText(sintomas)
+    } catch (e) {
+      console.error('[agent] error creando embedding:', e)
+      const isQuota = e?.code === 'insufficient_quota' || e?.status === 429 || e?.error?.code === 'insufficient_quota'
+      if (isQuota) {
+        const fallback = generateFallback(sintomas)
+        const doc = await AiConsult.create({
+          userId: req.userId,
+          sintomas,
+          especie,
+          edad,
+          contexto,
+          sources: fallback.sources,
+          rawResponse: 'fallback',
+          parsedResponse: fallback.parsed,
+          status: 'pending'
+        })
+        return res.status(503).json({
+          error: 'embeddings_quota_exceeded',
+          message: 'Límite de cuota de embeddings alcanzado. Se devolvió prediagnóstico orientativo local.',
+          fallback: fallback.parsed,
+          sources: fallback.sources,
+          consultId: doc._id.toString()
+        })
+      }
+      throw e
+    }
 
-    const system = `Eres un asistente veterinario orientativo. Usa SOLO la EVIDENCIA proveída para generar recomendaciones orientativas y banderas rojas. Responde en JSON EXACTO con propiedades:
-recomendaciones (string), red_flags (string|null), confidence ("alta"|"media"|"baja"), fuentes (array de strings), disclaimer (string).
-Nunca inventes fuentes; si la información es insuficiente indica incertidumbre.`
+    // 5) Recuperar solo documentos relevantes y preferiblemente etiquetados para la misma especie
+    // Se asume que embeddingUtil.findTopK puede devolver metadata/species; si no, filtrar manualmente.
+    const top = embeddingUtil.findTopK(qEmb, 6)
+    // Filtrar por metadata.species si existe
+    const topForSpecies = top.filter(t => !t.metadata?.species || String(t.metadata?.species).toLowerCase() === especie).slice(0, 4)
+    const evidence = topForSpecies.map(t => `SOURCE:${t.id}\n${t.text}`).join('\n\n---\n\n')
+    const sources = topForSpecies.map(t => t.id)
+
+    // 6) construir prompt estricto (solo mascotas y formato JSON de triage preliminar)
+    const system = `Eres un asistente orientado EXCLUSIVAMENTE a medicina veterinaria de MASCOTAS domésticas (${especie}). Solo das evaluaciones PRELIMINARES y pautas de triage. NUNCA das diagnóstico definitivo ni prescribes medicamentos que requieran receta. Si el caso no es aplicable, devuelve {"error":"not_applicable"}.
+RESPONDE ÚNICAMENTE con JSON válido que siga la estructura: 
+{ "animal":"<especie>", "urgency":"low|medium|high|emergency|unknown", "likely_causes":[...], "recommended_next_steps":[...], "warning":"", "disclaimer":"" }
+Incluye un disclaimer breve al final. Usa solo la evidencia provista y tus conocimientos veterinarios orientativos.`
 
     const user = `
 Sintomas: ${sintomas}
-Especie: ${especie ?? 'N/D'}
+Especie: ${especie}
 Edad: ${edad ?? 'N/D'}
 Contexto adicional: ${contexto ?? 'N/A'}
 
@@ -52,9 +140,8 @@ ${evidence}
     let text = ''
     let parsed = null
 
-    // Si no hay Gemini configurado, usar fallback local
-    if (!genAI) {
-      console.warn('[agent] GEMINI_API_KEY no configurado -> usando fallback local')
+    if (!gemini) {
+      console.warn('[agent] API Gemini no configurada -> usando fallback local')
       const fallback = generateFallback(sintomas)
       const doc = await AiConsult.create({
         userId: req.userId,
@@ -67,18 +154,11 @@ ${evidence}
         parsedResponse: fallback.parsed,
         status: 'pending'
       })
-      return res.status(503).json({
-        error: 'gemini_not_configured',
-        message: 'GEMINI_API_KEY no configurado. Se devolvió prediagnóstico orientativo local.',
-        fallback: fallback.parsed,
-        sources: fallback.sources,
-        consultId: doc._id.toString()
-      })
+      return res.status(503).json({ error: 'gemini_not_configured', message: 'API Gemini no configurada. Se devolvió prediagnóstico orientativo local.', fallback: fallback.parsed, sources: fallback.sources, consultId: doc._id.toString() })
     }
 
     try {
-      // USAR GEMINI
-      const model = genAI.getGenerativeModel({
+      const model = gemini.getGenerativeModel({
         model: GEMINI_MODEL,
         generationConfig: { temperature: 0.1, maxOutputTokens: 700 }
       })
@@ -86,33 +166,74 @@ ${evidence}
       const genResp = await model.generateContent(prompt)
       text = genResp?.response?.text ? genResp.response.text() : JSON.stringify(genResp.response)
     } catch (e) {
-      console.error('[agent] Gemini error:', e)
-      const fallback = generateFallback(sintomas)
+      console.error('[agent] LLM error', e)
+      const isQuota = e?.code === 'insufficient_quota' || e?.status === 429 || e?.error?.code === 'insufficient_quota'
+      if (isQuota) {
+        const fallback = generateFallback(sintomas)
+        const doc = await AiConsult.create({
+          userId: req.userId,
+          sintomas,
+          especie,
+          edad,
+          contexto,
+          sources: fallback.sources,
+          rawResponse: 'fallback',
+          parsedResponse: fallback.parsed,
+          status: 'pending'
+        })
+        return res.status(503).json({
+          error: 'llm_quota_exceeded',
+          message: 'Límite de cuota del LLM alcanzado. Se devolvió prediagnóstico orientativo local.',
+          fallback: fallback.parsed,
+          sources: fallback.sources,
+          consultId: doc._id.toString()
+        })
+      }
+      throw e
+    }
+
+    // Extraer JSON resultado
+    try {
+      const match = text.match(/\{[\s\S]*\}$/)
+      if (match) parsed = JSON.parse(match[0])
+      else parsed = null
+    } catch (e) {
+      parsed = null
+    }
+
+    // Validar JSON con schema
+    let valid = false
+    if (parsed) {
+      try {
+        valid = validate(parsed)
+      } catch (e) {
+        valid = false
+      }
+    }
+
+    // Si no válido, guardar raw y avisar para revisión (no enviar info potencialmente incorrecta al usuario)
+    if (!valid) {
       const doc = await AiConsult.create({
         userId: req.userId,
         sintomas,
         especie,
         edad,
         contexto,
-        sources: fallback.sources,
-        rawResponse: 'fallback',
-        parsedResponse: fallback.parsed,
-        status: 'pending'
+        sources,
+        rawResponse: text,
+        parsedResponse: parsed,
+        status: 'pending',
+        note: 'invalid_json_from_llm'
       })
-      return res.status(503).json({
-        error: 'gemini_error',
-        message: 'Error con Gemini API. Se devolvió prediagnóstico orientativo local.',
-        fallback: fallback.parsed,
-        sources: fallback.sources,
-        consultId: doc._id.toString()
+      return res.status(200).json({
+        ok: false,
+        message: 'El asistente no devolvió una respuesta estructurada válida. Se guardó para revisión por un profesional.',
+        consultId: doc._id.toString(),
+        raw: text
       })
     }
 
-    try {
-      const match = text.match(/\{[\s\S]*\}$/)
-      if (match) parsed = JSON.parse(match[0])
-    } catch (e) { parsed = null }
-
+    // Si válido, persistir y devolver
     const doc = await AiConsult.create({
       userId: req.userId,
       sintomas,
@@ -132,7 +253,7 @@ ${evidence}
   }
 })
 
-// reindex endpoint
+// reindex endpoint (mantiene comportamiento)
 router.post('/reindex', auth, requireRole('veterinario'), async (req, res) => {
   try {
     const count = await embeddingUtil.indexDirectory(DATA_DIR)
