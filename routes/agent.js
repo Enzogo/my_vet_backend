@@ -4,16 +4,16 @@ import auth from '../middleware/auth.js'
 import AiConsult from '../models/AiConsult.js'
 import * as embeddingUtil from '../ai/embeddings.js'
 import { generateFallback } from '../ai/fallback.js'
-import OpenAI from 'openai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import path from 'path'
 import requireRole from '../middleware/requireRole.js'
 
 const router = express.Router()
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
-const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini'
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash'
 const DATA_DIR = path.resolve(process.cwd(), 'data', 'vet')
 
-const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null
 
 let indexed = false
 async function ensureIndex() {
@@ -30,38 +30,8 @@ router.post('/agent', auth, async (req, res) => {
 
     await ensureIndex()
 
-    // 1) embedding de la consulta (puede fallar por cuota)
-    let qEmb
-    try {
-      qEmb = await embeddingUtil.embedText(sintomas)
-    } catch (e) {
-      console.error('[agent] error creando embedding:', e)
-      const isQuota = e?.code === 'insufficient_quota' || e?.status === 429 || e?.error?.code === 'insufficient_quota'
-      if (isQuota) {
-        const fallback = generateFallback(sintomas)
-        const doc = await AiConsult.create({
-          userId: req.userId,
-          sintomas,
-          especie,
-          edad,
-          contexto,
-          sources: fallback.sources,
-          rawResponse: 'fallback',
-          parsedResponse: fallback.parsed,
-          status: 'pending'
-        })
-        return res.status(503).json({
-          error: 'openai_quota_exceeded',
-          message: 'Límite de cuota OpenAI alcanzado. Se devolvió prediagnóstico orientativo local.',
-          fallback: fallback.parsed,
-          sources: fallback.sources,
-          consultId: doc._id.toString()
-        })
-      }
-      throw e
-    }
-
-    const top = embeddingUtil.findTopK(qEmb, 4)
+    // 1) Sin necesidad de embedding - búsqueda por keywords
+    const top = embeddingUtil.findTopK(sintomas, 4)
     const evidence = top.map(t => `SOURCE:${t.id}\n${t.text}`).join('\n\n---\n\n')
     const sources = top.map(t => t.id)
 
@@ -81,8 +51,10 @@ ${evidence}
 
     let text = ''
     let parsed = null
-    if (!openai) {
-      console.warn('[agent] OPENAI_API_KEY no configurada -> usando fallback local')
+
+    // Si no hay Gemini configurado, usar fallback local
+    if (!genAI) {
+      console.warn('[agent] GEMINI_API_KEY no configurado -> usando fallback local')
       const fallback = generateFallback(sintomas)
       const doc = await AiConsult.create({
         userId: req.userId,
@@ -95,45 +67,45 @@ ${evidence}
         parsedResponse: fallback.parsed,
         status: 'pending'
       })
-      return res.status(503).json({ error: 'openai_not_configured', message: 'OPENAI_API_KEY no configurada. Se devolvió prediagnóstico orientativo local.', fallback: fallback.parsed, sources: fallback.sources, consultId: doc._id.toString() })
+      return res.status(503).json({
+        error: 'gemini_not_configured',
+        message: 'GEMINI_API_KEY no configurado. Se devolvió prediagnóstico orientativo local.',
+        fallback: fallback.parsed,
+        sources: fallback.sources,
+        consultId: doc._id.toString()
+      })
     }
 
     try {
-      const chatResp = await openai.chat.completions.create({
-        model: CHAT_MODEL,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user }
-        ],
-        max_tokens: 700,
-        temperature: 0.1
+      // USAR GEMINI
+      const model = genAI.getGenerativeModel({
+        model: GEMINI_MODEL,
+        generationConfig: { temperature: 0.1, maxOutputTokens: 700 }
       })
-      text = chatResp.choices?.[0]?.message?.content || ''
+      const prompt = `${system}\n\n${user}\n\nRESPONDE SÓLO CON EL JSON SOLICITADO.`
+      const genResp = await model.generateContent(prompt)
+      text = genResp?.response?.text ? genResp.response.text() : JSON.stringify(genResp.response)
     } catch (e) {
-      console.error('[agent] OpenAI chat error', e)
-      const isQuota = e?.code === 'insufficient_quota' || e?.status === 429 || e?.error?.code === 'insufficient_quota'
-      if (isQuota) {
-        const fallback = generateFallback(sintomas)
-        const doc = await AiConsult.create({
-          userId: req.userId,
-          sintomas,
-          especie,
-          edad,
-          contexto,
-          sources: fallback.sources,
-          rawResponse: 'fallback',
-          parsedResponse: fallback.parsed,
-          status: 'pending'
-        })
-        return res.status(503).json({
-          error: 'openai_quota_exceeded',
-          message: 'Límite de cuota OpenAI alcanzado. Se devolvió prediagnóstico orientativo local.',
-          fallback: fallback.parsed,
-          sources: fallback.sources,
-          consultId: doc._id.toString()
-        })
-      }
-      throw e
+      console.error('[agent] Gemini error:', e)
+      const fallback = generateFallback(sintomas)
+      const doc = await AiConsult.create({
+        userId: req.userId,
+        sintomas,
+        especie,
+        edad,
+        contexto,
+        sources: fallback.sources,
+        rawResponse: 'fallback',
+        parsedResponse: fallback.parsed,
+        status: 'pending'
+      })
+      return res.status(503).json({
+        error: 'gemini_error',
+        message: 'Error con Gemini API. Se devolvió prediagnóstico orientativo local.',
+        fallback: fallback.parsed,
+        sources: fallback.sources,
+        consultId: doc._id.toString()
+      })
     }
 
     try {

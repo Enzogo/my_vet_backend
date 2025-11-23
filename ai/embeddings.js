@@ -1,10 +1,10 @@
 import fs from 'fs'
 import path from 'path'
-import OpenAI from 'openai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
-const EMBED_MODEL = process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-small'
-const client = new OpenAI({ apiKey: OPENAI_API_KEY })
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash'
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null
 
 const INDEX = []
 const INDEX_FILE = path.resolve(process.cwd(), 'ai', 'index.json')
@@ -36,62 +36,56 @@ function loadIndexFromDisk() {
   return false
 }
 
-async function withRetry(fn, retries = 3, initialMs = 500) {
-  let wait = initialMs
-  for (let i = 0; i <= retries; i++) {
-    try {
-      return await fn()
-    } catch (err) {
-      const status = err?.status || err?.response?.status || null
-      if (i === retries || (status && status !== 429)) throw err
-      const jitter = Math.floor(Math.random() * 200)
-      await new Promise(r => setTimeout(r, wait + jitter))
-      wait *= 2
+// Búsqueda simple por palabras clave (sin embeddings)
+function searchByKeywords(query, k = 3) {
+  const keywords = query.toLowerCase().split(/\s+/)
+  const scored = INDEX.map(doc => {
+    const docText = doc.text.toLowerCase()
+    let score = 0
+    for (const kw of keywords) {
+      const matches = (docText.match(new RegExp(kw, 'g')) || []).length
+      score += matches
     }
-  }
-  throw new Error('Retries agotados')
-}
-
-async function createEmbedding(text) {
-  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY no definido')
-  const resp = await withRetry(() => client.embeddings.create({ model: EMBED_MODEL, input: text }), 3, 500)
-  return resp.data?.[0]?.embedding
-}
-
-function cosine(a, b) {
-  let dot = 0, na = 0, nb = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    na += a[i] * a[i]
-    nb += b[i] * b[i]
-  }
-  return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-10)
+    return { ...doc, score }
+  })
+  return scored.sort((a, b) => b.score - a.score).slice(0, k)
 }
 
 export async function indexDirectory(dirPath) {
   if (loadIndexFromDisk()) return INDEX.length
   INDEX.length = 0
   if (!fs.existsSync(dirPath)) return 0
-  const files = fs.readdirSync(dirPath).filter(f => /\.(md|txt)$/i.test(f))
-  for (const fname of files) {
-    const full = path.join(dirPath, fname)
-    const text = fs.readFileSync(full, 'utf8')
-    const embedding = await createEmbedding(text)
-    INDEX.push({ id: fname, text, embedding })
+  
+  try {
+    const files = fs.readdirSync(dirPath).filter(f => /\.(md|txt)$/i.test(f))
+    for (const fname of files) {
+      const full = path.join(dirPath, fname)
+      const text = fs.readFileSync(full, 'utf8')
+      // Sin embeddings - solo almacenar el texto
+      INDEX.push({ id: fname, text, embedding: null })
+    }
+    saveIndexToDisk()
+    console.log(`[embeddings] indexado ${INDEX.length} archivos`)
+  } catch (e) {
+    console.error('[embeddings] error indexando directorio:', e)
   }
-  saveIndexToDisk()
   return INDEX.length
 }
 
-export function findTopK(queryEmbedding, k = 3) {
-  return INDEX
-    .map(doc => ({ id: doc.id, text: doc.text, score: cosine(queryEmbedding, doc.embedding) }))
-    .sort((a,b) => b.score - a.score)
-    .slice(0, k)
+// Usar búsqueda por keywords en lugar de embeddings
+export function findTopK(query, k = 3) {
+  if (!query) return []
+  // Si es un array (embedding), usar búsqueda simple
+  if (Array.isArray(query)) {
+    return searchByKeywords(JSON.stringify(query), k)
+  }
+  return searchByKeywords(query, k)
 }
 
 export async function embedText(text) {
-  return await createEmbedding(text)
+  // No usar embeddings - solo devolver null
+  // Gemini embedding no es gratuito, así que saltamos esto
+  return null
 }
 
 export default {
