@@ -30,6 +30,24 @@ router.get('/debug/headers', auth, async (req, res) => {
   } catch (e) { return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Debug: ver TODAS las citas en la DB (sin filtro de usuario)
+router.get('/debug/allcitas', async (req, res) => {
+  try {
+    const citas = await Cita.find({}).limit(10).lean()
+    return res.json({
+      ok: true,
+      total: citas.length,
+      citas: citas.map(c => ({
+        id: c._id.toString(),
+        ownerId: c.ownerId?.toString(),
+        estado: c.estado,
+        motivo: c.motivo,
+        fechaIso: c.fechaIso
+      }))
+    })
+  } catch (e) { return res.status(500).json({ error: 'server_error', msg: e.message }) }
+})
+
 // Perfil del dueño
 router.post('/me/profile', auth, async (req, res) => {
   try {
@@ -148,9 +166,9 @@ router.get('/me/citas/pendientes', auth, async (req, res) => {
       horaFin: c.horaFin || null,
       veterinarioId: c.veterinarioId?.toString() || null,
       veterinarioNombre: c.veterinarioNombre || null,
-      duenioNombre: owner.nombre || 'Sin nombre',
-      duenioTelefono: owner.telefono || null,
-      duenioCorreo: owner.email || null,
+      duenioNombre: owner?.nombre || 'Sin nombre',
+      duenioTelefono: owner?.telefono || null,
+      duenioCorreo: owner?.email || null,
       notas: c.notas || null
     }))
     
