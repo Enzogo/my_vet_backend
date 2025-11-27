@@ -70,6 +70,7 @@ router.delete('/me/mascotas/:id', auth, async (req, res) => {
 // Citas: listar propias (todas)
 router.get('/me/citas', auth, async (req, res) => {
   try {
+    const owner = await User.findById(req.userId).lean()
     const citas = await Cita.find({ ownerId: req.userId })
       .populate({ path: 'mascotaId', select: 'nombre' })
       .populate({ path: 'veterinarioId', select: 'nombre' })
@@ -79,7 +80,7 @@ router.get('/me/citas', auth, async (req, res) => {
       fechaIso: c.fechaIso,
       motivo: c.motivo,
       mascotaId: c.mascotaId?._id?.toString() ?? null,
-      mascotaNombre: c.mascotaId?.nombre ?? null,
+      nombreMascota: c.mascotaId?.nombre ?? null,
       estado: c.estado ?? null,
       diagnostico: c.diagnostico || null,
       procedimientos: c.procedimientos || null,
@@ -88,6 +89,9 @@ router.get('/me/citas', auth, async (req, res) => {
       horaFin: c.horaFin || null,
       veterinarioId: c.veterinarioId?.toString() ?? null,
       veterinarioNombre: c.veterinarioNombre || null,
+      duenioNombre: owner?.nombre || null,
+      duenioTelefono: owner?.telefono || null,
+      duenioCorreo: owner?.email || null,
       notas: c.notas || null
     })))
   } catch (e) { console.error('[owners] /me/citas error:', e); return res.status(500).json({ error: 'server_error' }) }
@@ -96,6 +100,7 @@ router.get('/me/citas', auth, async (req, res) => {
 // Citas: listar pendientes
 router.get('/me/citas/pendientes', auth, async (req, res) => {
   try {
+    const owner = await User.findById(req.userId).lean()
     const citas = await Cita.find({ ownerId: req.userId, estado: 'pendiente' })
       .populate({ path: 'mascotaId', select: 'nombre' })
       .populate({ path: 'veterinarioId', select: 'nombre' })
@@ -105,7 +110,7 @@ router.get('/me/citas/pendientes', auth, async (req, res) => {
       fechaIso: c.fechaIso,
       motivo: c.motivo,
       mascotaId: c.mascotaId?._id?.toString() ?? null,
-      mascotaNombre: c.mascotaId?.nombre ?? null,
+      nombreMascota: c.mascotaId?.nombre ?? null,
       estado: c.estado,
       diagnostico: c.diagnostico || null,
       procedimientos: c.procedimientos || null,
@@ -114,6 +119,9 @@ router.get('/me/citas/pendientes', auth, async (req, res) => {
       horaFin: c.horaFin || null,
       veterinarioId: c.veterinarioId?.toString() ?? null,
       veterinarioNombre: c.veterinarioNombre || null,
+      duenioNombre: owner?.nombre || null,
+      duenioTelefono: owner?.telefono || null,
+      duenioCorreo: owner?.email || null,
       notas: c.notas || null
     })))
   } catch (e) { console.error('[owners] /me/citas/pendientes error:', e); return res.status(500).json({ error: 'server_error' }) }
@@ -122,6 +130,7 @@ router.get('/me/citas/pendientes', auth, async (req, res) => {
 // Citas: listar completadas
 router.get('/me/citas/completadas', auth, async (req, res) => {
   try {
+    const owner = await User.findById(req.userId).lean()
     const citas = await Cita.find({ ownerId: req.userId, estado: 'completada' })
       .populate({ path: 'mascotaId', select: 'nombre' })
       .populate({ path: 'veterinarioId', select: 'nombre' })
@@ -131,7 +140,7 @@ router.get('/me/citas/completadas', auth, async (req, res) => {
       fechaIso: c.fechaIso,
       motivo: c.motivo,
       mascotaId: c.mascotaId?._id?.toString() ?? null,
-      mascotaNombre: c.mascotaId?.nombre ?? null,
+      nombreMascota: c.mascotaId?.nombre ?? null,
       estado: c.estado,
       diagnostico: c.diagnostico || null,
       procedimientos: c.procedimientos || null,
@@ -140,6 +149,9 @@ router.get('/me/citas/completadas', auth, async (req, res) => {
       horaFin: c.horaFin || null,
       veterinarioId: c.veterinarioId?.toString() ?? null,
       veterinarioNombre: c.veterinarioNombre || null,
+      duenioNombre: owner?.nombre || null,
+      duenioTelefono: owner?.telefono || null,
+      duenioCorreo: owner?.email || null,
       notas: c.notas || null
     })))
   } catch (e) { console.error('[owners] /me/citas/completadas error:', e); return res.status(500).json({ error: 'server_error' }) }
@@ -195,9 +207,16 @@ router.put('/me/citas/:id', auth, async (req, res) => {
   try {
     const { id } = req.params
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'citaId inválido' })
+
     const update = {}
     if (req.body?.fechaIso !== undefined) update.fechaIso = req.body.fechaIso
     if (req.body?.motivo !== undefined) update.motivo = req.body.motivo
+    if (req.body?.horaInicio !== undefined) update.horaInicio = req.body.horaInicio
+    if (req.body?.horaFin !== undefined) update.horaFin = req.body.horaFin
+    if (req.body?.diagnostico !== undefined) update.diagnostico = req.body.diagnostico
+    if (req.body?.procedimientos !== undefined) update.procedimientos = req.body.procedimientos
+    if (req.body?.recomendaciones !== undefined) update.recomendaciones = req.body.recomendaciones
+
     if (req.body?.mascotaId !== undefined) {
       const mid = req.body.mascotaId
       if (!mongoose.isValidObjectId(mid)) return res.status(400).json({ error: 'mascotaId inválido' })
@@ -205,9 +224,34 @@ router.put('/me/citas/:id', auth, async (req, res) => {
       if (!mascota) return res.status(404).json({ error: 'mascota no encontrada' })
       update.mascotaId = mid
     }
+
     const updated = await Cita.findOneAndUpdate({ _id: id, ownerId: req.userId }, { $set: update }, { new: true })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .lean()
+
     if (!updated) return res.status(404).json({ error: 'cita no encontrada' })
-    return res.json({ id: updated._id.toString(), fechaIso: updated.fechaIso, motivo: updated.motivo, mascotaId: updated.mascotaId.toString(), estado: updated.estado })
+
+    const owner = await User.findById(req.userId).lean()
+
+    return res.json({
+      id: updated._id.toString(),
+      fechaIso: updated.fechaIso,
+      motivo: updated.motivo,
+      mascotaId: updated.mascotaId?._id?.toString() ?? null,
+      nombreMascota: updated.mascotaId?.nombre ?? null,
+      estado: updated.estado,
+      horaInicio: updated.horaInicio || null,
+      horaFin: updated.horaFin || null,
+      diagnostico: updated.diagnostico || null,
+      procedimientos: updated.procedimientos || null,
+      recomendaciones: updated.recomendaciones || null,
+      veterinarioId: updated.veterinarioId?.toString() ?? null,
+      veterinarioNombre: updated.veterinarioNombre || null,
+      duenioNombre: owner?.nombre || null,
+      duenioTelefono: owner?.telefono || null,
+      duenioCorreo: owner?.email || null
+    })
   } catch (e) { console.error('[owners] PUT /me/citas/:id error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
