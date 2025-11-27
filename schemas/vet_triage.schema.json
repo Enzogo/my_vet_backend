@@ -2,25 +2,25 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "VetTriage",
   "type": "object",
-  "required": ["animal", "urgency","likely_causes","recommended_next_steps","warning","disclaimer"],
+  "required": ["animal", "urgencia","causas_frecuentes","pasos_recomendados","alerta","responsabilidad"],
   "properties": {
     "animal": { "type": "string", "enum": ["perro","gato","conejo","hurón","ave","loro","canario","pájaro","pez","cobaya","hamster","huron"] },
-    "urgency": {
+    "urgencia": {
       "type": "string",
-      "enum": ["low","medium","high","emergency","unknown"]
+      "enum": ["baja","media","alta","emergencia","desconocida"]
     },
-    "likely_causes": {
+    "causas_frecuentes": {
       "type": "array",
       "items": { "type": "string" },
       "minItems": 0
     },
-    "recommended_next_steps": {
+    "pasos_recomendados": {
       "type": "array",
       "items": { "type": "string" },
       "minItems": 0
     },
-    "warning": { "type": "string" },
-    "disclaimer": { "type": "string" }
+    "alerta": { "type": "string" },
+    "responsabilidad": { "type": "string" }
   },
   "additionalProperties": false
 }

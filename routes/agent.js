@@ -126,20 +126,30 @@ router.post('/agent', auth, async (req, res) => {
     const sources = topForSpecies.map(t => t.id)
 
     // 6) construir prompt estricto (solo mascotas y formato JSON de triage preliminar)
-    const system = `Eres un asistente orientado EXCLUSIVAMENTE a medicina veterinaria de MASCOTAS domésticas (${especie}). Solo das evaluaciones PRELIMINARES y pautas de triage. NUNCA das diagnóstico definitivo ni prescribes medicamentos que requieran receta. Si el caso no es aplicable, devuelve {"error":"not_applicable"}.
-RESPONDE ÚNICAMENTE con JSON válido que siga la estructura: 
-{ "animal":"<especie>", "urgency":"low|medium|high|emergency|unknown", "likely_causes":[...], "recommended_next_steps":[...], "warning":"", "disclaimer":"" }
-Incluye un disclaimer breve al final. Usa solo la evidencia provista y tus conocimientos veterinarios orientativos.`
+    const system = `Eres un asistente orientado EXCLUSIVAMENTE a medicina veterinaria de MASCOTAS domésticas (${especie}). Solo das evaluaciones PRELIMINARES y pautas de triage. NUNCA das diagnóstico definitivo ni prescribes medicamentos que requieran receta.
+
+INSTRUCCIÓN CRÍTICA: Responde ÚNICAMENTE con JSON válido, SIN código markdown, SIN \`\`\` ni explicaciones.
+
+Formato exacto del JSON (completar todos los campos):
+{
+  "animal": "<especie>",
+  "urgencia": "baja|media|alta|emergencia|desconocida",
+  "causas_frecuentes": ["causa1", "causa2", ...],
+  "pasos_recomendados": ["paso1", "paso2", ...],
+  "alerta": "<alerta o texto vacío>",
+  "responsabilidad": "<disclaimer breve>"
+}`
 
     const user = `
 Sintomas: ${sintomas}
 Especie: ${especie}
 Edad: ${edad ?? 'N/D'}
-Contexto adicional: ${contexto ?? 'N/A'}
+Contexto: ${contexto ?? 'N/A'}
 
 EVIDENCIA:
 ${evidence}
-`
+
+Proporciona SOLO el JSON, sin explicaciones previas ni posteriores.`
 
     let text = ''
     let parsed = null
@@ -166,9 +176,11 @@ ${evidence}
         model: GEMINI_MODEL,
         generationConfig: { temperature: 0.1, maxOutputTokens: 700 }
       })
-      const prompt = `${system}\n\n${user}\n\nRESPONDE SÓLO CON EL JSON SOLICITADO.`
+      const prompt = `${system}\n\n${user}`
+      console.log('[agent] Enviando prompt a Gemini...')
       const genResp = await model.generateContent(prompt)
       text = genResp?.response?.text ? genResp.response.text() : JSON.stringify(genResp.response)
+      console.log('[agent] Respuesta de Gemini (primeros 300 chars):', text.substring(0, 300))
     } catch (e) {
       console.error('[agent] LLM error', e)
       const isQuota = e?.code === 'insufficient_quota' || e?.status === 429 || e?.error?.code === 'insufficient_quota'
@@ -196,12 +208,19 @@ ${evidence}
       throw e
     }
 
-    // Extraer JSON resultado
+    // Extraer JSON resultado (limpiar markdown code blocks)
     try {
-      const match = text.match(/\{[\s\S]*\}$/)
-      if (match) parsed = JSON.parse(match[0])
-      else parsed = null
+      // Remover ```json y ``` si están presentes
+      let cleanedText = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim()
+      // También intenta match desde la primera llave
+      const match = cleanedText.match(/\{[\s\S]*\}/)
+      if (match) {
+        parsed = JSON.parse(match[0])
+      } else {
+        parsed = null
+      }
     } catch (e) {
+      console.error('[agent] Error parsing JSON:', e.message, 'Raw text:', text.substring(0, 200))
       parsed = null
     }
 
@@ -210,7 +229,11 @@ ${evidence}
     if (parsed) {
       try {
         valid = validate(parsed)
+        if (!valid) {
+          console.error('[agent] Schema validation failed:', validate.errors, 'Parsed:', JSON.stringify(parsed).substring(0, 300))
+        }
       } catch (e) {
+        console.error('[agent] Validation error:', e.message)
         valid = false
       }
     }
@@ -250,7 +273,7 @@ ${evidence}
       status: 'pending'
     })
 
-    return res.json({ ok: true, consultId: doc._id.toString(), parsed, raw: text })
+    return res.json({ ok: true, consultId: doc._id.toString(), diagnostico: parsed })
   } catch (e) {
     console.error('AI agent error', e)
     return res.status(500).json({ error: 'server_error', details: e?.message || String(e) })
