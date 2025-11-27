@@ -133,11 +133,11 @@ router.get('/me/citas/:id', auth, async (req, res) => {
   } catch (e) { console.error('[owners] /me/citas/:id error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
-// Citas: listar pendientes
+// Citas: listar pendientes (incluyendo en_curso)
 router.get('/me/citas/pendientes', auth, async (req, res) => {
   try {
     const owner = await User.findById(req.userId).lean()
-    const citas = await Cita.find({ ownerId: req.userId, estado: 'pendiente' })
+    const citas = await Cita.find({ ownerId: req.userId, estado: { $in: ['pendiente', 'en_curso'] } })
       .populate({ path: 'mascotaId', select: 'nombre' })
       .populate({ path: 'veterinarioId', select: 'nombre' })
       .lean()

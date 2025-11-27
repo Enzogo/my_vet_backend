@@ -91,6 +91,76 @@ router.get('/citas', async (_req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Citas: listar pendientes (incluyendo en_curso)
+router.get('/citas/pendientes', async (_req, res) => {
+  try {
+    const citas = await Cita.find({ estado: { $in: ['pendiente', 'en_curso'] } })
+      .sort({ createdAt: -1 })
+      .populate({ path: 'ownerId', select: 'nombre email telefono' })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .lean()
+    
+    const out = citas.map(c => ({
+      id: c._id.toString(),
+      fechaIso: c.fechaIso,
+      motivo: c.motivo,
+      estado: c.estado || 'pendiente',
+      mascotaId: c.mascotaId?._id?.toString() ?? null,
+      mascotaNombre: c.mascotaId?.nombre || null,
+      ownerId: c.ownerId?._id?.toString() ?? null,
+      duenioNombre: c.ownerId?.nombre || c.ownerId?.email || null,
+      duenioTelefono: c.ownerId?.telefono || null,
+      duenioCorreo: c.ownerId?.email || null,
+      veterinarioId: c.veterinarioId?.toString() ?? null,
+      veterinarioNombre: c.veterinarioNombre || null,
+      diagnostico: c.diagnostico || null,
+      procedimientos: c.procedimientos || null,
+      recomendaciones: c.recomendaciones || null,
+      horaInicio: c.horaInicio || null,
+      horaFin: c.horaFin || null,
+      notas: c.notas || null
+    }))
+    
+    return res.json(out)
+  } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
+})
+
+// Citas: listar completadas
+router.get('/citas/completadas', async (_req, res) => {
+  try {
+    const citas = await Cita.find({ estado: 'completada' })
+      .sort({ createdAt: -1 })
+      .populate({ path: 'ownerId', select: 'nombre email telefono' })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .lean()
+    
+    const out = citas.map(c => ({
+      id: c._id.toString(),
+      fechaIso: c.fechaIso,
+      motivo: c.motivo,
+      estado: c.estado || 'pendiente',
+      mascotaId: c.mascotaId?._id?.toString() ?? null,
+      mascotaNombre: c.mascotaId?.nombre || null,
+      ownerId: c.ownerId?._id?.toString() ?? null,
+      duenioNombre: c.ownerId?.nombre || c.ownerId?.email || null,
+      duenioTelefono: c.ownerId?.telefono || null,
+      duenioCorreo: c.ownerId?.email || null,
+      veterinarioId: c.veterinarioId?.toString() ?? null,
+      veterinarioNombre: c.veterinarioNombre || null,
+      diagnostico: c.diagnostico || null,
+      procedimientos: c.procedimientos || null,
+      recomendaciones: c.recomendaciones || null,
+      horaInicio: c.horaInicio || null,
+      horaFin: c.horaFin || null,
+      notas: c.notas || null
+    }))
+    
+    return res.json(out)
+  } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
+})
+
 router.post('/me/profile', async (req, res) => {
   try {
     const { nombre, telefono, direccion, clinicName, clinicPhone, clinicAddress, speciality, registrationNumber } = req.body || {}
