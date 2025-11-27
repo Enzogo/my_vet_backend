@@ -211,17 +211,32 @@ Proporciona SOLO el JSON, sin explicaciones previas ni posteriores.`
     // Extraer JSON resultado (limpiar markdown code blocks)
     try {
       // Remover ```json y ``` si están presentes
-      let cleanedText = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim()
+      let cleanedText = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '').trim()
       // También intenta match desde la primera llave
       const match = cleanedText.match(/\{[\s\S]*\}/)
       if (match) {
         parsed = JSON.parse(match[0])
+        console.log('[agent] JSON parsed exitosamente. Keys:', Object.keys(parsed))
       } else {
+        console.warn('[agent] No se encontró JSON válido')
         parsed = null
       }
     } catch (e) {
-      console.error('[agent] Error parsing JSON:', e.message, 'Raw text:', text.substring(0, 200))
+      console.error('[agent] Error parsing JSON:', e.message, 'Raw text (primeros 300 chars):', text.substring(0, 300))
       parsed = null
+    }
+
+    // Rellenar campos faltantes
+    if (parsed) {
+      if (!parsed.alerta) parsed.alerta = ''
+      if (!parsed.responsabilidad) parsed.responsabilidad = 'Evaluación preliminar. Consulte a un veterinario para diagnóstico definitivo.'
+      if (!parsed.pasos_recomendados || !Array.isArray(parsed.pasos_recomendados)) {
+        parsed.pasos_recomendados = ['Contactar con un veterinario para evaluación completa']
+      }
+      if (!parsed.causas_frecuentes || !Array.isArray(parsed.causas_frecuentes)) {
+        parsed.causas_frecuentes = []
+      }
+      console.log('[agent] Parsed completo:', JSON.stringify(parsed))
     }
 
     // Validar JSON con schema
@@ -273,7 +288,22 @@ Proporciona SOLO el JSON, sin explicaciones previas ni posteriores.`
       status: 'pending'
     })
 
-    return res.json({ ok: true, consultId: doc._id.toString(), diagnostico: parsed })
+    // Mapear al formato que Android espera
+    const androidResponse = {
+      ok: true,
+      consultId: doc._id.toString(),
+      parsed: {
+        recomendaciones: parsed.pasos_recomendados?.join('\n') || '',
+        red_flags: parsed.alerta || '',
+        disclaimer: parsed.responsabilidad || '',
+        urgencia: parsed.urgencia || 'desconocida',
+        animal: parsed.animal || '',
+        causas_frecuentes: parsed.causas_frecuentes || []
+      },
+      raw: text
+    }
+
+    return res.json(androidResponse)
   } catch (e) {
     console.error('AI agent error', e)
     return res.status(500).json({ error: 'server_error', details: e?.message || String(e) })

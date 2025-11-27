@@ -67,7 +67,7 @@ router.delete('/me/mascotas/:id', auth, async (req, res) => {
   } catch (e) { console.error('[owners] /me/mascotas DELETE error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
-// Citas: listar propias (todas)
+// Citas: listar todas
 router.get('/me/citas', auth, async (req, res) => {
   try {
     const owner = await User.findById(req.userId).lean()
@@ -95,6 +95,42 @@ router.get('/me/citas', auth, async (req, res) => {
       notas: c.notas || null
     })))
   } catch (e) { console.error('[owners] /me/citas error:', e); return res.status(500).json({ error: 'server_error' }) }
+})
+
+// Citas: obtener una por ID
+router.get('/me/citas/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'citaId inválido' })
+    
+    const owner = await User.findById(req.userId).lean()
+    const cita = await Cita.findOne({ _id: id, ownerId: req.userId })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .lean()
+    
+    if (!cita) return res.status(404).json({ error: 'cita no encontrada' })
+    
+    return res.json({
+      id: cita._id.toString(),
+      fechaIso: cita.fechaIso,
+      motivo: cita.motivo,
+      mascotaId: cita.mascotaId?._id?.toString() ?? null,
+      nombreMascota: cita.mascotaId?.nombre ?? null,
+      estado: cita.estado,
+      diagnostico: cita.diagnostico || null,
+      procedimientos: cita.procedimientos || null,
+      recomendaciones: cita.recomendaciones || null,
+      horaInicio: cita.horaInicio || null,
+      horaFin: cita.horaFin || null,
+      veterinarioId: cita.veterinarioId?.toString() ?? null,
+      veterinarioNombre: cita.veterinarioNombre || null,
+      duenioNombre: owner?.nombre || null,
+      duenioTelefono: owner?.telefono || null,
+      duenioCorreo: owner?.email || null,
+      notas: cita.notas || null
+    })
+  } catch (e) { console.error('[owners] /me/citas/:id error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
 // Citas: listar pendientes
