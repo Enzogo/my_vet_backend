@@ -7,7 +7,7 @@ const CitaSchema = new Schema({
   veterinarioId: { type: Schema.Types.ObjectId, ref: 'User' },
   fechaIso: { type: String, required: true },
   motivo: { type: String, required: true },
-  estado: { type: String, enum: ['pendiente', 'en_curso', 'completada', 'cancelada'], default: 'pendiente' },
+  estado: { type: String, enum: ['pendiente', 'completada', 'cancelada'], default: 'pendiente' },
   
   // Datos del veterinario
   veterinarioNombre: { type: String },

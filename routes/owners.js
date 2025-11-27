@@ -7,6 +7,29 @@ import mongoose from 'mongoose'
 
 const router = Router()
 
+// Debug: endpoint sin autenticación
+router.get('/debug/health', async (req, res) => {
+  try {
+    return res.json({ ok: true, msg: 'Owners router funcionando' })
+  } catch (e) { return res.status(500).json({ error: 'server_error' }) }
+})
+
+// Debug: endpoint que muestra headers (requiere auth)
+router.get('/debug/headers', auth, async (req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      userId: req.userId,
+      headers: {
+        authorization: req.headers.authorization ? `Bearer ${req.headers.authorization.substring(7, 20)}...` : 'MISSING',
+        contentType: req.headers['content-type'],
+        accept: req.headers.accept
+      },
+      msg: 'Auth funciona correctamente'
+    })
+  } catch (e) { return res.status(500).json({ error: 'server_error' }) }
+})
+
 // Perfil del dueño
 router.post('/me/profile', auth, async (req, res) => {
   try {
@@ -97,6 +120,90 @@ router.get('/me/citas', auth, async (req, res) => {
   } catch (e) { console.error('[owners] /me/citas error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
+// Citas: listar pendientes
+router.get('/me/citas/pendientes', auth, async (req, res) => {
+  try {
+    const owner = await User.findById(req.userId).lean()
+    if (!owner) {
+      return res.status(404).json({ error: 'owner_not_found' })
+    }
+    
+    const citas = await Cita.find({ ownerId: req.userId, estado: 'pendiente' })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .sort({ createdAt: -1 })
+      .lean()
+    
+    const result = citas.map(c => ({
+      id: c._id.toString(),
+      fechaIso: c.fechaIso || '',
+      motivo: c.motivo || '',
+      mascotaId: c.mascotaId?._id?.toString() || null,
+      nombreMascota: c.mascotaId?.nombre || 'Sin mascota',
+      estado: c.estado || 'pendiente',
+      diagnostico: c.diagnostico || null,
+      procedimientos: c.procedimientos || null,
+      recomendaciones: c.recomendaciones || null,
+      horaInicio: c.horaInicio || null,
+      horaFin: c.horaFin || null,
+      veterinarioId: c.veterinarioId?.toString() || null,
+      veterinarioNombre: c.veterinarioNombre || null,
+      duenioNombre: owner.nombre || 'Sin nombre',
+      duenioTelefono: owner.telefono || null,
+      duenioCorreo: owner.email || null,
+      notas: c.notas || null
+    }))
+    
+    res.set('Content-Type', 'application/json; charset=utf-8')
+    return res.json(result)
+  } catch (e) { 
+    console.error('[pendientes] error:', e.message)
+    return res.status(500).json({ error: 'server_error' }) 
+  }
+})
+
+// Citas: listar completadas
+router.get('/me/citas/completadas', auth, async (req, res) => {
+  try {
+    const owner = await User.findById(req.userId).lean()
+    if (!owner) {
+      return res.status(404).json({ error: 'owner_not_found' })
+    }
+    
+    const citas = await Cita.find({ ownerId: req.userId, estado: 'completada' })
+      .populate({ path: 'mascotaId', select: 'nombre' })
+      .populate({ path: 'veterinarioId', select: 'nombre' })
+      .sort({ createdAt: -1 })
+      .lean()
+    
+    const result = citas.map(c => ({
+      id: c._id.toString(),
+      fechaIso: c.fechaIso || '',
+      motivo: c.motivo || '',
+      mascotaId: c.mascotaId?._id?.toString() || null,
+      nombreMascota: c.mascotaId?.nombre || 'Sin mascota',
+      estado: 'completada',
+      diagnostico: c.diagnostico || null,
+      procedimientos: c.procedimientos || null,
+      recomendaciones: c.recomendaciones || null,
+      horaInicio: c.horaInicio || null,
+      horaFin: c.horaFin || null,
+      veterinarioId: c.veterinarioId?.toString() || null,
+      veterinarioNombre: c.veterinarioNombre || null,
+      duenioNombre: owner.nombre || 'Sin nombre',
+      duenioTelefono: owner.telefono || null,
+      duenioCorreo: owner.email || null,
+      notas: c.notas || null
+    }))
+    
+    res.set('Content-Type', 'application/json; charset=utf-8')
+    return res.json(result)
+  } catch (e) { 
+    console.error('[completadas] error:', e.message)
+    return res.status(500).json({ error: 'server_error' }) 
+  }
+})
+
 // Citas: obtener una por ID
 router.get('/me/citas/:id', auth, async (req, res) => {
   try {
@@ -131,66 +238,6 @@ router.get('/me/citas/:id', auth, async (req, res) => {
       notas: cita.notas || null
     })
   } catch (e) { console.error('[owners] /me/citas/:id error:', e); return res.status(500).json({ error: 'server_error' }) }
-})
-
-// Citas: listar pendientes (incluyendo en_curso)
-router.get('/me/citas/pendientes', auth, async (req, res) => {
-  try {
-    const owner = await User.findById(req.userId).lean()
-    const citas = await Cita.find({ ownerId: req.userId, estado: { $in: ['pendiente', 'en_curso'] } })
-      .populate({ path: 'mascotaId', select: 'nombre' })
-      .populate({ path: 'veterinarioId', select: 'nombre' })
-      .lean()
-    return res.json(citas.map(c => ({
-      id: c._id.toString(),
-      fechaIso: c.fechaIso,
-      motivo: c.motivo,
-      mascotaId: c.mascotaId?._id?.toString() ?? null,
-      nombreMascota: c.mascotaId?.nombre ?? null,
-      estado: c.estado,
-      diagnostico: c.diagnostico || null,
-      procedimientos: c.procedimientos || null,
-      recomendaciones: c.recomendaciones || null,
-      horaInicio: c.horaInicio || null,
-      horaFin: c.horaFin || null,
-      veterinarioId: c.veterinarioId?.toString() ?? null,
-      veterinarioNombre: c.veterinarioNombre || null,
-      duenioNombre: owner?.nombre || null,
-      duenioTelefono: owner?.telefono || null,
-      duenioCorreo: owner?.email || null,
-      notas: c.notas || null
-    })))
-  } catch (e) { console.error('[owners] /me/citas/pendientes error:', e); return res.status(500).json({ error: 'server_error' }) }
-})
-
-// Citas: listar completadas
-router.get('/me/citas/completadas', auth, async (req, res) => {
-  try {
-    const owner = await User.findById(req.userId).lean()
-    const citas = await Cita.find({ ownerId: req.userId, estado: 'completada' })
-      .populate({ path: 'mascotaId', select: 'nombre' })
-      .populate({ path: 'veterinarioId', select: 'nombre' })
-      .lean()
-    return res.json(citas.map(c => ({
-      id: c._id.toString(),
-      fechaIso: c.fechaIso,
-      motivo: c.motivo,
-      mascotaId: c.mascotaId?._id?.toString() ?? null,
-      nombreMascota: c.mascotaId?.nombre ?? null,
-      estado: c.estado,
-      diagnostico: c.diagnostico || null,
-      procedimientos: c.procedimientos || null,
-      recomendaciones: c.recomendaciones || null,
-      horaInicio: c.horaInicio || null,
-      horaFin: c.horaFin || null,
-      veterinarioId: c.veterinarioId?.toString() ?? null,
-      veterinarioNombre: c.veterinarioNombre || null,
-      duenioNombre: owner?.nombre || null,
-      duenioTelefono: owner?.telefono || null,
-      duenioCorreo: owner?.email || null,
-      notas: c.notas || null
-    })))
-  } catch (e) { console.error('[owners] /me/citas/completadas error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
 // Citas: crear (versión con logging y verificación explícita)
@@ -310,6 +357,22 @@ router.get('/debug/cita/:id', auth, async (req, res) => {
     const c = await Cita.findById(id).lean()
     return res.json({ ok: !!c, cita: c || null })
   } catch (e) { console.error('[owners] GET /debug/cita/:id error:', e); return res.status(500).json({ error: 'server_error' }) }
+})
+
+// Debug: verificar headers y token
+router.get('/debug/headers', auth, async (req, res) => {
+  try {
+    return res.json({
+      authHeader: req.headers.authorization ? 'presente' : 'ausente',
+      userId: req.userId || 'sin userId',
+      userRole: req.userRole || 'sin role',
+      headers: {
+        authorization: req.headers.authorization ? 'bearer...' : null,
+        host: req.headers.host,
+        contentType: req.headers['content-type']
+      }
+    })
+  } catch (e) { console.error('[owners] GET /debug/headers error:', e); return res.status(500).json({ error: 'server_error' }) }
 })
 
 export default router

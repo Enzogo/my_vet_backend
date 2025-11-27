@@ -126,10 +126,10 @@ router.get('/citas/pendientes', async (_req, res) => {
   } catch (e) { console.error(e); return res.status(500).json({ error: 'server_error' }) }
 })
 
-// Citas: listar completadas
+// Citas: listar completadas (acepta 'hecha' o 'completada')
 router.get('/citas/completadas', async (_req, res) => {
   try {
-    const citas = await Cita.find({ estado: 'completada' })
+    const citas = await Cita.find({ estado: { $in: ['completada', 'hecha'] } })
       .sort({ createdAt: -1 })
       .populate({ path: 'ownerId', select: 'nombre email telefono' })
       .populate({ path: 'mascotaId', select: 'nombre' })
@@ -185,9 +185,13 @@ router.patch('/citas/:id', async (req, res) => {
     const { estado, notas, diagnostico, procedimientos, recomendaciones, horaInicio, horaFin } = req.body || {}
     const set = {}
     
-    // Estado
-    if (typeof estado === 'string' && ['pendiente', 'en_curso', 'completada', 'cancelada'].includes(estado)) {
-      set.estado = estado
+    // Estado - convertir 'hecha' a 'completada' para consistencia
+    if (typeof estado === 'string') {
+      let mappedEstado = estado
+      if (estado === 'hecha') mappedEstado = 'completada'
+      if (['pendiente', 'en_curso', 'completada', 'cancelada'].includes(mappedEstado)) {
+        set.estado = mappedEstado
+      }
     }
     
     // Notas generales
