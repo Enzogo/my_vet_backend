@@ -48,7 +48,23 @@ router.get('/debug/allcitas', async (req, res) => {
   } catch (e) { return res.status(500).json({ error: 'server_error', msg: e.message }) }
 })
 
-// Perfil del dueño
+// Perfil del dueño - GET (obtener datos)
+router.get('/me', auth, async (req, res) => {
+  try {
+    const owner = await User.findById(req.userId).lean()
+    if (!owner) {
+      return res.status(404).json({ error: 'owner_not_found' })
+    }
+    return res.json({
+      nombre: owner.nombre || null,
+      telefono: owner.telefono || null,
+      direccion: owner.direccion || null,
+      email: owner.email || null
+    })
+  } catch (e) { console.error('[owners] /me GET error:', e); return res.status(500).json({ error: 'server_error' }) }
+})
+
+// Perfil del dueño - POST (actualizar datos)
 router.post('/me/profile', auth, async (req, res) => {
   try {
     const { nombre, telefono, direccion } = req.body || {}
